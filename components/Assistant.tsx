@@ -60,11 +60,11 @@ const Assistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Инициализируем AI прямо перед вызовом
+      // Прямая инициализация согласно правилам SDK
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Формируем историю для чата (пропускаем первое приветственное сообщение, так как оно не в контексте API)
-      const chatHistory = messages.slice(1).map(m => ({
+      // Формирование истории: Gemini ожидает 'user' и 'model'
+      const history = messages.slice(1).map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         parts: [{ text: m.text }]
       }));
@@ -75,12 +75,12 @@ const Assistant: React.FC = () => {
           systemInstruction: KNOWLEDGE_BASE,
           tools: [{ googleSearch: {} }],
         },
-        history: chatHistory
+        history: history
       });
 
       const response = await chat.sendMessage({ message: userMessage });
       
-      const assistantText = response.text || "Извините, я не смог сформулировать ответ.";
+      const assistantText = response.text || "Не удалось получить ответ от системы. Попробуйте перефразировать вопрос.";
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const sources = groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
 
@@ -89,13 +89,14 @@ const Assistant: React.FC = () => {
         text: assistantText,
         sources: sources.length > 0 ? sources : undefined
       }]);
-    } catch (error) {
-      console.error("Assistant API Error:", error);
-      let errorMessage = 'Произошла ошибка при связи с сервером. Пожалуйста, попробуйте позже.';
+    } catch (error: any) {
+      console.error("AI Error:", error);
+      let errorMessage = 'Ошибка соединения с ИИ-модулем. Убедитесь, что API ключ корректно добавлен в настройки Vercel.';
       
-      // Проверка на отсутствие API ключа
-      if (!process.env.API_KEY) {
-        errorMessage = 'Ошибка: API ключ не настроен в окружении.';
+      if (error?.message?.includes('404')) {
+        errorMessage = 'Модель временно недоступна. Попробуйте позже.';
+      } else if (error?.message?.includes('429')) {
+        errorMessage = 'Слишком много запросов. Пожалуйста, подождите минуту.';
       }
 
       setMessages(prev => [...prev, { role: 'assistant', text: errorMessage }]);
@@ -111,7 +112,7 @@ const Assistant: React.FC = () => {
         <button
           onClick={() => setIsOpen(true)}
           className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-500/30 transition-all hover:scale-110 active:scale-95 animate-glow"
-          aria-label="Открыть ассистента"
+          aria-label="Открыть чат"
         >
           <MessageSquare className="h-6 w-6" />
           <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -164,7 +165,7 @@ const Assistant: React.FC = () => {
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-white/10">
                         <p className="text-[10px] text-white/40 mb-2 flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> Найдено в интернете:
+                          <Globe className="h-3 w-3" /> Найдено в сети:
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {msg.sources.map((source: any, sIdx: number) => (
