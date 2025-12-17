@@ -1,21 +1,38 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Send, X, Bot, Loader2, Globe, Trash2, AlertCircle, Key, ExternalLink } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Loader2, Globe, Trash2, AlertCircle, Key, ExternalLink, ShieldCheck } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
-// Removed conflicting global declaration for window.aistudio as it is already defined in the environment.
+declare global {
+  interface AIStudio {
+    hasSelectedApiKey: () => Promise<boolean>;
+    openSelectKey: () => Promise<void>;
+  }
+
+  interface Window {
+    // Removed readonly to match existing global declarations
+    aistudio: AIStudio;
+  }
+}
 
 const KNOWLEDGE_BASE = `
-Вы — официальный ИИ-ассистент инженерного офиса "Системотех". 
-Специализация: АСУ ТП, аудит, проектирование, программирование ПЛК/SCADA.
-Отвечай технически грамотно, вежливо, на русском языке.
-Используй Google Search для проверки актуальных норм ГОСТ и оборудования.
+Вы — ведущий экспертный ИИ-ассистент инженерного офиса "Системотех". 
+Ваша специализация: промышленная автоматизация (АСУ ТП), проектирование систем управления, программирование ПЛК (S7-1200/1500, ОВЕН, Segnetics), SCADA-системы и аудит безопасности.
+
+ПРАВИЛА ОТВЕТОВ:
+1. Формат: Технически точный, структурированный, лаконичный. Используйте списки и выделение жирным.
+2. Поиск: Поскольку биллинг активен, ОБЯЗАТЕЛЬНО используйте Google Search для проверки актуальных версий ГОСТ (например, серия 34 или Р 59793) и подбора современных аналогов оборудования при импортозамещении.
+3. Язык: Строго русский. При упоминании зарубежных брендов приводите аналоги (например, Schneider Electric -> System Electric / DEKraft).
+4. Этикета: Вежливость, профессионализм. Вы — часть команды "Системотех".
 `;
 
 const Assistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [hasKey, setHasKey] = useState<boolean>(true); // Предполагаем наличие, проверим при открытии
+  const [hasKey, setHasKey] = useState<boolean>(true); 
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; sources?: any[] }[]>([
-    { role: 'assistant', text: 'Инженерный офис Системотех на связи. Чем могу помочь?' }
+    { 
+      role: 'assistant', 
+      text: 'Инженерный офис "Системотех" приветствует вас. Биллинг подтвержден, поиск по ГОСТ и базам оборудования активен. Какой узел автоматизации обсудим?' 
+    }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -23,18 +40,21 @@ const Assistant: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const checkApiKey = async () => {
-    // Accessing aistudio from the environment
-    const aiStudio = (window as any).aistudio;
-    if (aiStudio) {
-      const selected = await aiStudio.hasSelectedApiKey();
-      setHasKey(selected);
+    try {
+      if (window.aistudio) {
+        const selected = await window.aistudio.hasSelectedApiKey();
+        setHasKey(selected);
+      } else {
+        setHasKey(!!process.env.API_KEY);
+      }
+    } catch (e) {
+      console.error("Ошибка проверки ключа:", e);
     }
   };
 
   useEffect(() => {
     if (isOpen) {
       checkApiKey();
-      scrollToBottom();
     }
   }, [isOpen]);
 
@@ -47,22 +67,34 @@ const Assistant: React.FC = () => {
   };
 
   const handleSelectKey = async () => {
-    const aiStudio = (window as any).aistudio;
-    if (aiStudio) {
-      await aiStudio.openSelectKey();
-      // Assume success after triggering the selection dialog
-      setHasKey(true);
-      setErrorStatus(null);
+    if (window.aistudio) {
+      try {
+        await window.aistudio.openSelectKey();
+        // Assume the key selection was successful after triggering openSelectKey
+        setHasKey(true);
+        setErrorStatus(null);
+      } catch (e) {
+        console.error("Ошибка открытия выбора ключа:", e);
+      }
     }
   };
 
   const clearChat = () => {
-    setMessages([{ role: 'assistant', text: 'Чат очищен. Жду ваших вопросов по АСУ ТП.' }]);
+    setMessages([{ 
+      role: 'assistant', 
+      text: 'Сессия перезапущена. Я готов к расчету архитектуры или аудиту вашей документации.' 
+    }]);
     setErrorStatus(null);
   };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
+
+    if (!process.env.API_KEY) {
+      setHasKey(false);
+      setErrorStatus("API_KEY не обнаружен.");
+      return;
+    }
 
     const userMessage = input.trim();
     setInput('');
@@ -84,7 +116,7 @@ const Assistant: React.FC = () => {
         }));
 
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: historyForAPI,
         config: {
           systemInstruction: KNOWLEDGE_BASE,
@@ -92,9 +124,9 @@ const Assistant: React.FC = () => {
         },
       });
 
-      const assistantText = response.text || "Не удалось получить ответ.";
+      // Use .text property directly as per guidelines
+      const assistantText = response.text || "Не удалось сформировать ответ. Попробуйте переформулировать запрос.";
       
-      // Extract grounding chunks for Google Search sources
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const sources = groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
 
@@ -104,20 +136,20 @@ const Assistant: React.FC = () => {
         sources: sources.length > 0 ? sources : undefined
       }]);
     } catch (error: any) {
-      console.error("API Error:", error);
-      const msg = error?.message || "";
+      console.error("Gemini API Error:", error);
+      const msg = error?.message || "Неизвестная ошибка";
       
-      // Handle missing key or invalid key errors by prompting selection
-      if (msg.includes("Requested entity was not found") || msg.includes("API Key")) {
+      // Reset key selection state and prompt if "Requested entity was not found" occurs
+      if (msg.includes("Requested entity was not found") || msg.includes("API Key") || msg.includes("invalid")) {
         setHasKey(false);
-        setErrorStatus("Требуется настройка API ключа.");
+        setErrorStatus("Требуется повторный выбор ключа.");
       } else {
-        setErrorStatus(msg);
+        setErrorStatus(`Ошибка API: ${msg}`);
       }
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        text: "Произошла ошибка при обращении к ИИ. Попробуйте проверить настройки подключения." 
+        text: "Произошла ошибка связи. Убедитесь, что биллинг активен и лимиты не превышены." 
       }]);
     } finally {
       setIsLoading(false);
@@ -129,89 +161,95 @@ const Assistant: React.FC = () => {
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-xl hover:scale-110 transition-all animate-glow"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-tr from-sky-500 to-indigo-600 text-white shadow-xl hover:scale-110 active:scale-95 transition-all animate-glow"
         >
-          <MessageSquare className="h-6 w-6" />
+          <Bot className="h-6 w-6" />
         </button>
       )}
 
       {isOpen && (
-        <div className="flex h-[600px] w-[350px] sm:w-[420px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0b0f1a]/95 shadow-2xl backdrop-blur-2xl animate-scale-in origin-bottom-right">
+        <div className="flex h-[620px] w-[360px] sm:w-[450px] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#0b0f1a]/98 shadow-2xl backdrop-blur-3xl animate-scale-in origin-bottom-right">
           {/* Header */}
           <div className="flex items-center justify-between bg-white/5 p-4 border-b border-white/10">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-sky-500/10 rounded-xl">
-                <Bot className="h-5 w-5 text-sky-400" />
+              <div className="p-2 bg-sky-500/20 rounded-xl border border-sky-500/30">
+                <ShieldCheck className="h-5 w-5 text-sky-400" />
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white leading-none">Системотех ИИ</h3>
-                <span className="text-[10px] text-emerald-400 flex items-center gap-1 mt-1">
-                  <span className="h-1 w-1 rounded-full bg-emerald-400 animate-pulse" /> онлайн
-                </span>
+                <h3 className="text-sm font-bold text-white leading-none">Системотех Эксперт</h3>
+                <div className="flex items-center gap-1.5 mt-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">Биллинг Активен</span>
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <button onClick={clearChat} className="p-2 text-white/30 hover:text-rose-400 transition-colors">
+              <button onClick={clearChat} title="Очистить сессию" className="p-2 text-white/30 hover:text-rose-400 transition-colors">
                 <Trash2 className="h-4 w-4" />
               </button>
-              <button onClick={() => setIsOpen(false)} className="p-2 text-white/30 hover:text-white">
+              <button onClick={() => setIsOpen(false)} className="p-2 text-white/30 hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
           </div>
 
           {!hasKey ? (
-            /* Key Selection State */
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6">
-              <div className="p-4 bg-amber-500/10 rounded-full">
+              <div className="p-4 bg-amber-500/10 rounded-full border border-amber-500/20">
                 <Key className="h-10 w-10 text-amber-400" />
               </div>
               <div className="space-y-2">
-                <h4 className="text-white font-semibold">Требуется активация ИИ</h4>
-                <p className="text-sm text-white/50">
-                  Для работы ассистента необходимо подключить ваш персональный API ключ.
+                <h4 className="text-white font-semibold">Настройка доступа</h4>
+                <p className="text-sm text-white/50 leading-relaxed">
+                  Для работы продвинутых моделей и поиска в реальном времени подключите ваш API ключ.
                 </p>
               </div>
               <button
                 onClick={handleSelectKey}
-                className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-sky-600/20"
+                className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-sky-600/20 active:scale-95"
               >
-                Подключить Gemini API
+                Выбрать Ключ
               </button>
-              <a 
-                href="https://ai.google.dev/gemini-api/docs/billing" 
-                target="_blank" 
-                rel="noreferrer"
-                className="text-[11px] text-sky-400 flex items-center gap-1 hover:underline"
-              >
-                Документация по биллингу <ExternalLink className="h-3 w-3" />
-              </a>
             </div>
           ) : (
-            /* Standard Chat State */
             <>
-              <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
+              <div className="flex-1 overflow-y-auto p-5 space-y-5 scrollbar-thin scrollbar-thumb-white/10">
                 {messages.map((msg, idx) => (
                   <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
-                    <div className={`p-3 rounded-2xl text-sm leading-relaxed max-w-[85%] ${
-                      msg.role === 'user' ? 'bg-sky-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-200 border border-white/10 rounded-tl-none'
+                    <div className={`p-4 rounded-2xl text-[13px] leading-relaxed max-w-[90%] shadow-sm ${
+                      msg.role === 'user' 
+                        ? 'bg-sky-600 text-white rounded-tr-none' 
+                        : 'bg-white/5 text-slate-200 border border-white/10 rounded-tl-none'
                     }`}>
-                      {msg.text}
+                      <div className="whitespace-pre-wrap">{msg.text}</div>
                       {msg.sources && (
-                        <div className="mt-3 pt-2 border-t border-white/5 flex flex-wrap gap-1">
-                          {msg.sources.map((s, i) => (
-                            <a key={i} href={s.uri} target="_blank" rel="noreferrer" className="text-[10px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500 hover:text-white transition-all">
-                              {s.title || 'Источник'}
-                            </a>
-                          ))}
+                        <div className="mt-4 pt-3 border-t border-white/5">
+                          <p className="text-[9px] text-white/40 mb-2 flex items-center gap-1 uppercase font-bold tracking-widest">
+                            <Globe className="h-3 w-3" /> Проверенные источники:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {msg.sources.map((s, i) => (
+                              <a 
+                                key={i} 
+                                href={s.uri} 
+                                target="_blank" 
+                                rel="noreferrer" 
+                                className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-sky-400 border border-white/10 hover:bg-sky-500/20 hover:text-white transition-all flex items-center gap-1"
+                              >
+                                {s.title?.substring(0, 30) || 'Документ'}...
+                                <ExternalLink className="h-2 w-2" />
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       )}
                     </div>
                   </div>
                 ))}
                 {isLoading && (
-                  <div className="flex items-center gap-2 text-slate-400 text-xs p-2">
-                    <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> Ищем лучшее решение...
+                  <div className="flex items-center gap-3 text-slate-400 text-[11px] p-2 bg-white/5 rounded-xl border border-white/5 animate-pulse">
+                    <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> 
+                    <span>ИИ анализирует документацию и выполняет поиск...</span>
                   </div>
                 )}
                 {errorStatus && (
@@ -223,19 +261,31 @@ const Assistant: React.FC = () => {
                 <div ref={messagesEndRef} />
               </div>
 
-              <div className="p-4 border-t border-white/5">
+              <div className="p-4 bg-white/[0.03] border-t border-white/10">
                 <div className="relative flex items-center">
                   <input
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Ваш вопрос..."
-                    className="w-full rounded-xl bg-white/5 border border-white/10 py-3 pl-4 pr-12 text-sm text-white focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all"
+                    placeholder="Ваш технический запрос..."
+                    className="w-full rounded-2xl bg-[#0b0f1a] border border-white/10 py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50 placeholder:text-white/20 transition-all shadow-inner"
                   />
-                  <button onClick={handleSend} disabled={!input.trim() || isLoading} className="absolute right-2 p-2 text-sky-500 disabled:text-white/10">
-                    <Send className="h-5 w-5" />
+                  <button 
+                    onClick={handleSend} 
+                    disabled={!input.trim() || isLoading} 
+                    className="absolute right-3 p-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl disabled:bg-white/5 disabled:text-white/10 transition-all shadow-lg active:scale-95"
+                  >
+                    <Send className="h-4 w-4" />
                   </button>
+                </div>
+                <div className="mt-3 flex items-center justify-between px-1">
+                  <p className="text-[8px] text-white/20 uppercase tracking-[0.2em]">
+                    Sistemotech Expert • G3 Pro
+                  </p>
+                  <p className="text-[8px] text-white/20">
+                    ГОСТ Р 59793 Compliance
+                  </p>
                 </div>
               </div>
             </>
