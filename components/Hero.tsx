@@ -1,6 +1,6 @@
 import React from 'react';
 import Reveal from './Reveal';
-import { Play, Filter, Activity, Cpu, FileCheck, CheckCircle2, Layout, ShieldCheck } from 'lucide-react';
+import { Play, Filter, Activity, Cpu, FileCheck, CheckCircle2, Layout, ShieldCheck, MessageSquare, Zap, BarChart3 } from 'lucide-react';
 
 const Hero: React.FC = () => {
   return (
@@ -36,15 +36,14 @@ const Hero: React.FC = () => {
 
         {/* Product Preview / Visualization */}
         <Reveal animation="animate-blur-in" delay="animate-delay-700" className="sm:mt-24 mt-16 hover-lift relative">
-          <div className="antialiased relative z-10 text-slate-100 p-6">
-            <section className="relative shadow-[0_10px_60px_-15px_rgba(0,0,0,0.6)] overflow-hidden hover:shadow-[0_20px_80px_-15px_rgba(0,0,0,0.8)] hover:border-white/15 transition-all duration-500 bg-gradient-to-b from-slate-900/40 to-slate-800/30 border border-white/20 rounded-3xl backdrop-blur-xl">
-              <div className="pointer-events-none absolute -inset-px rounded-[1.45rem] bg-[radial-gradient(80%_60%_at_50%_0%,rgba(90,97,255,0.25),transparent_60%)]"></div>
-              <div className="relative p-8">
+          <div className="antialiased relative z-10 text-slate-100 p-0 sm:p-6">
+            <section className="relative shadow-[0_10px_60px_-15px_rgba(0,0,0,0.6)] overflow-hidden hover:shadow-[0_20px_80px_-15px_rgba(0,0,0,0.8)] border border-white/10 rounded-3xl bg-[#0b0f1a]/40 backdrop-blur-2xl transition-all duration-500">
+              <div className="pointer-events-none absolute -inset-px rounded-[1.45rem] bg-[radial-gradient(80%_60%_at_50%_0%,rgba(56,189,248,0.15),transparent_60%)]"></div>
+              
+              <div className="relative p-4 sm:p-8">
                 <div className="relative mx-auto w-full">
                   <div className="absolute inset-0 translate-y-8 scale-[0.96] rounded-2xl bg-slate-900/50 ring-1 ring-white/5 blur-[0.3px]"></div>
-                  <div className="absolute inset-0 ring-1 ring-white/5 bg-slate-900/60 rounded-2xl translate-y-4 scale-[0.98]"></div>
-                  
-                  <div className="relative rounded-2xl bg-[linear-gradient(180deg,rgba(19,24,31,0.9),rgba(10,13,18,0.9))] ring-1 ring-white/10 overflow-hidden hover:ring-white/15 transition-all duration-300">
+                  <div className="relative rounded-2xl bg-[linear-gradient(180deg,rgba(19,24,31,0.95),rgba(10,13,18,0.95))] ring-1 ring-white/10 overflow-hidden hover:ring-white/15 transition-all duration-300">
                     {/* Header of fake window */}
                     <div className="flex hover:bg-slate-950/70 transition-all duration-300 bg-slate-950/50 border-b border-white/5 rounded-t-2xl p-4 md:px-6 backdrop-blur items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -68,7 +67,7 @@ const Hero: React.FC = () => {
                       <div className="absolute inset-0 overflow-hidden p-6 space-y-4">
                         
                         {/* Task 1 */}
-                        <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/5 hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 group opacity-0 animate-slide-in-left animate-delay-800" style={{ opacity: 1, transform: 'translateY(0)' }}>
+                        <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/5 hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 group">
                           <div className="h-4 w-4 rounded border-2 border-emerald-500/60 bg-emerald-500/10 group-hover:border-emerald-500 group-hover:bg-emerald-500/20 transition-all duration-200"></div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 text-sm">
@@ -83,7 +82,7 @@ const Hero: React.FC = () => {
                         </div>
 
                         {/* Task 2 */}
-                        <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/5 hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 group opacity-0 animate-slide-in-left animate-delay-900" style={{ opacity: 1, transform: 'translateY(0)' }}>
+                        <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/5 hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 group">
                           <div className="h-4 w-4 rounded border-2 border-amber-500/60 group-hover:border-amber-500 transition-colors duration-200"></div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-3 text-sm">
@@ -98,7 +97,7 @@ const Hero: React.FC = () => {
                         </div>
 
                         {/* Task 3 */}
-                        <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/5 hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 group opacity-0 animate-slide-in-left animate-delay-1000" style={{ opacity: 1, transform: 'translateY(0)' }}>
+                        <div className="flex items-center gap-4 p-4 rounded-lg bg-slate-900/40 border border-white/5 hover:bg-slate-900/80 hover:border-white/10 transition-all duration-300 group">
                           <div className="h-4 w-4 rounded border-2 border-violet-500/60 bg-violet-500/10 group-hover:border-violet-500 group-hover:bg-violet-500/20 transition-all duration-200 flex items-center justify-center">
                             <div className="w-2 h-2 bg-violet-400 rounded-full"></div>
                           </div>
@@ -120,16 +119,65 @@ const Hero: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="relative z-10 p-8">
-                <div className="w-full px-2 py-2">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 hover:border-white/15 hover:bg-white/8 transition-all duration-200">
-                    ГОСТ Р 59793
-                    <div className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></div>
+
+              {/* Expressive Project Manageability Footer Block */}
+              <div className="relative z-10 border-t border-white/5 bg-white/[0.02] backdrop-blur-md p-6 sm:p-10">
+                <div className="grid lg:grid-cols-2 gap-10 items-center">
+                  <div>
+                    <div className="inline-flex items-center gap-2.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-1.5 text-xs font-semibold text-emerald-400 mb-6 tracking-wide uppercase">
+                      Стандарт ГОСТ Р 59793
+                      <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                    </div>
+                    <h2 className="text-3xl sm:text-4xl text-white tracking-tighter font-medium leading-tight">
+                      Управляемость <br className="hidden sm:block" />
+                      <span className="text-sky-400">вашего проекта</span>
+                    </h2>
+                    <p className="sm:text-lg text-base text-slate-400 mt-5 leading-relaxed max-w-xl">
+                      Мы не просто проектируем — мы выстраиваем систему прозрачного контроля. Используем современные инструменты цифрового взаимодействия для исключения "слепых зон" в ходе работ.
+                    </p>
                   </div>
-                  <h2 className="mt-4 text-3xl sm:text-4xl text-white tracking-tighter font-medium">Управляемость проекта</h2>
-                  <p className="sm:text-lg text-base text-slate-400 mt-4">
-                    Обеспечиваем прозрачную коммуникацию и предсказуемый результат. Взаимодействуем через обмен проектной документацией, фото/видео с объекта и марк-апы в чертежах, сокращая количество выездов.
-                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 group hover:border-sky-500/40 hover:bg-white/10 transition-all duration-300">
+                      <div className="h-10 w-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 shrink-0 group-hover:scale-110 transition-transform">
+                        <Activity className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">Мониторинг</p>
+                        <p className="text-xs text-slate-400 truncate">Прозрачность 24/7</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 group hover:border-violet-500/40 hover:bg-white/10 transition-all duration-300">
+                      <div className="h-10 w-10 rounded-xl bg-violet-500/10 flex items-center justify-center text-violet-400 shrink-0 group-hover:scale-110 transition-transform">
+                        <MessageSquare className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">Связь</p>
+                        <p className="text-xs text-slate-400 truncate">Оперативные правки</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 group hover:border-amber-500/40 hover:bg-white/10 transition-all duration-300">
+                      <div className="h-10 w-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400 shrink-0 group-hover:scale-110 transition-transform">
+                        <BarChart3 className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">Логика</p>
+                        <p className="text-xs text-slate-400 truncate">Контроль алгоритмов</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-4 p-4 rounded-2xl bg-white/5 border border-white/10 group hover:border-emerald-500/40 hover:bg-white/10 transition-all duration-300">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-110 transition-transform">
+                        <Zap className="w-5 h-5" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-white">Скорость</p>
+                        <p className="text-xs text-slate-400 truncate">Соблюдение сроков</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
