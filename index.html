@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru" class="h-full bg-[#0b0f1a]">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Системотех — Инженерный офис АСУ ТП</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: { inter: ['Inter', 'ui-sans-serif', 'system-ui'] },
+            colors: {
+              base: {
+                900: '#0b0f1a',
+                950: '#0a0d18'
+              }
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.6s ease-out forwards',
+              'slide-up': 'slideUp 0.8s ease-out forwards',
+              'slide-in-left': 'slideInLeft 0.7s ease-out forwards',
+              'slide-in-right': 'slideInRight 0.7s ease-out forwards',
+              'blur-in': 'blurIn 1s ease-out forwards',
+              'scale-in': 'scaleIn 0.6s ease-out forwards',
+              'glow': 'glow 2s ease-in-out infinite alternate'
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' }
+              },
+              slideUp: {
+                '0%': { opacity: '0', transform: 'translateY(20px)' },
+                '100%': { opacity: '1', transform: 'translateY(0)' }
+              },
+              slideInLeft: {
+                '0%': { opacity: '0', transform: 'translateX(-30px)' },
+                '100%': { opacity: '1', transform: 'translateX(0)' }
+              },
+              slideInRight: {
+                '0%': { opacity: '0', transform: 'translateX(30px)' },
+                '100%': { opacity: '1', transform: 'translateX(0)' }
+              },
+              blurIn: {
+                '0%': { opacity: '0', filter: 'blur(10px)', transform: 'scale(0.95)' },
+                '100%': { opacity: '1', filter: 'blur(0px)', transform: 'scale(1)' }
+              },
+              scaleIn: {
+                '0%': { opacity: '0', transform: 'scale(0.9)' },
+                '100%': { opacity: '1', transform: 'scale(1)' }
+              },
+              glow: {
+                '0%': { boxShadow: '0 0 20px rgba(56, 189, 248, 0.3)' },
+                '100%': { boxShadow: '0 0 40px rgba(56, 189, 248, 0.6)' }
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      .neon-frame {
+        position: relative;
+        isolation: isolate;
+        border-radius: 20px;
+        transition: all 0.3s ease;
+      }
+      .neon-frame::before {
+        content: '';
+        position: absolute;
+        inset: -6%;
+        z-index: -1;
+        background: radial-gradient(60% 80% at 0% 50%, rgba(56, 189, 248, 0.4), transparent 60%),
+          radial-gradient(60% 80% at 100% 50%, rgba(251, 146, 60, 0.4), transparent 60%);
+        filter: blur(30px) saturate(120%);
+        border-radius: 28px;
+        transition: all 0.3s ease;
+      }
+      .neon-frame:hover::before {
+        filter: blur(35px) saturate(140%);
+        background: radial-gradient(70% 90% at 0% 50%, rgba(56, 189, 248, 0.6), transparent 70%),
+          radial-gradient(70% 90% at 100% 50%, rgba(251, 146, 60, 0.6), transparent 70%);
+      }
+      .glass {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(12px);
+        transition: all 0.3s ease;
+      }
+      .glass:hover {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.06));
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        backdrop-filter: blur(16px);
+      }
+      .section-divider::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100%;
+        max-width: 72rem;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+      }
+      .hover-lift {
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      }
+      .hover-lift:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+      }
+      /* Custom Animation Utilities */
+      .animate-delay-100 { animation-delay: 0.1s; }
+      .animate-delay-200 { animation-delay: 0.2s; }
+      .animate-delay-300 { animation-delay: 0.3s; }
+      .animate-delay-400 { animation-delay: 0.4s; }
+      .animate-delay-500 { animation-delay: 0.5s; }
+      .animate-delay-600 { animation-delay: 0.6s; }
+      .animate-delay-700 { animation-delay: 0.7s; }
+      .animate-delay-800 { animation-delay: 0.8s; }
+      .animate-delay-900 { animation-delay: 0.9s; }
+      .animate-delay-1000 { animation-delay: 1s; }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.561.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
