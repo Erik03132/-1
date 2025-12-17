@@ -1,5 +1,6 @@
+
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Send, X, Bot, Loader2, Globe, Trash2, AlertCircle, Key, ExternalLink, ShieldCheck } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Loader2, Globe, Trash2, AlertCircle, Key, ExternalLink, ShieldCheck, Info } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
 declare global {
@@ -9,8 +10,8 @@ declare global {
   }
 
   interface Window {
-    // Removed readonly to match existing global declarations
-    aistudio: AIStudio;
+    // Added optional modifier to match existing global property definition
+    aistudio?: AIStudio;
   }
 }
 
@@ -20,8 +21,8 @@ const KNOWLEDGE_BASE = `
 
 ПРАВИЛА ОТВЕТОВ:
 1. Формат: Технически точный, структурированный, лаконичный. Используйте списки и выделение жирным.
-2. Поиск: Поскольку биллинг активен, ОБЯЗАТЕЛЬНО используйте Google Search для проверки актуальных версий ГОСТ (например, серия 34 или Р 59793) и подбора современных аналогов оборудования при импортозамещении.
-3. Язык: Строго русский. При упоминании зарубежных брендов приводите аналоги (например, Schneider Electric -> System Electric / DEKraft).
+2. Поиск: ОБЯЗАТЕЛЬНО используйте Google Search для проверки актуальных версий ГОСТ и подбора современных аналогов оборудования.
+3. Язык: Строго русский.
 4. Этикета: Вежливость, профессионализм. Вы — часть команды "Системотех".
 `;
 
@@ -70,7 +71,7 @@ const Assistant: React.FC = () => {
     if (window.aistudio) {
       try {
         await window.aistudio.openSelectKey();
-        // Assume the key selection was successful after triggering openSelectKey
+        // После вызова диалога считаем выбор успешным, чтобы пользователь мог продолжить
         setHasKey(true);
         setErrorStatus(null);
       } catch (e) {
@@ -90,12 +91,6 @@ const Assistant: React.FC = () => {
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    if (!process.env.API_KEY) {
-      setHasKey(false);
-      setErrorStatus("API_KEY не обнаружен.");
-      return;
-    }
-
     const userMessage = input.trim();
     setInput('');
     setErrorStatus(null);
@@ -105,7 +100,7 @@ const Assistant: React.FC = () => {
     setIsLoading(true);
 
     try {
-      // Create a new GoogleGenAI instance right before making an API call to ensure it uses the latest key
+      // Всегда создаем новый экземпляр перед запросом, чтобы использовать актуальный ключ
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const historyForAPI = updatedMessages
@@ -124,8 +119,7 @@ const Assistant: React.FC = () => {
         },
       });
 
-      // Use .text property directly as per guidelines
-      const assistantText = response.text || "Не удалось сформировать ответ. Попробуйте переформулировать запрос.";
+      const assistantText = response.text || "Не удалось сформировать ответ. Проверьте настройки API.";
       
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const sources = groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
@@ -137,19 +131,18 @@ const Assistant: React.FC = () => {
       }]);
     } catch (error: any) {
       console.error("Gemini API Error:", error);
-      const msg = error?.message || "Неизвестная ошибка";
+      const msg = error?.message || "";
       
-      // Reset key selection state and prompt if "Requested entity was not found" occurs
       if (msg.includes("Requested entity was not found") || msg.includes("API Key") || msg.includes("invalid")) {
         setHasKey(false);
-        setErrorStatus("Требуется повторный выбор ключа.");
+        setErrorStatus("Ошибка авторизации. Пожалуйста, выберите ключ заново.");
       } else {
-        setErrorStatus(`Ошибка API: ${msg}`);
+        setErrorStatus(`Ошибка: ${msg}`);
       }
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        text: "Произошла ошибка связи. Убедитесь, что биллинг активен и лимиты не превышены." 
+        text: "Произошла ошибка связи. Убедитесь, что ваш API ключ привязан к проекту с включенной оплатой (Billing)." 
       }]);
     } finally {
       setIsLoading(false);
@@ -179,7 +172,7 @@ const Assistant: React.FC = () => {
                 <h3 className="text-sm font-bold text-white leading-none">Системотех Эксперт</h3>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">Биллинг Активен</span>
+                  <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">G3 PRO • СЕРВИС АКТИВЕН</span>
                 </div>
               </div>
             </div>
@@ -194,22 +187,40 @@ const Assistant: React.FC = () => {
           </div>
 
           {!hasKey ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6">
-              <div className="p-4 bg-amber-500/10 rounded-full border border-amber-500/20">
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <div className="p-5 bg-amber-500/10 rounded-full border border-amber-500/20 mb-6">
                 <Key className="h-10 w-10 text-amber-400" />
               </div>
-              <div className="space-y-2">
-                <h4 className="text-white font-semibold">Настройка доступа</h4>
-                <p className="text-sm text-white/50 leading-relaxed">
-                  Для работы продвинутых моделей и поиска в реальном времени подключите ваш API ключ.
-                </p>
-              </div>
+              <h4 className="text-white font-semibold text-lg mb-2">Настройка доступа</h4>
+              <p className="text-sm text-white/50 leading-relaxed mb-8">
+                Для активации поиска по ГОСТ и использования модели Pro, необходимо выбрать API ключ, привязанный к вашему платному проекту в Google Cloud.
+              </p>
+              
               <button
                 onClick={handleSelectKey}
-                className="w-full py-3 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-medium transition-all shadow-lg shadow-sky-600/20 active:scale-95"
+                className="w-full py-4 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold transition-all shadow-lg shadow-sky-600/20 active:scale-95 mb-6"
               >
                 Выбрать Ключ
               </button>
+
+              <div className="w-full space-y-3 pt-4 border-t border-white/5">
+                <a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 text-[11px] text-sky-400 hover:text-sky-300 transition-colors"
+                >
+                  <ExternalLink className="h-3 w-3" /> Создать ключ в AI Studio
+                </a>
+                <a 
+                  href="https://ai.google.dev/gemini-api/docs/billing" 
+                  target="_blank" 
+                  rel="noreferrer"
+                  className="flex items-center justify-center gap-2 text-[11px] text-white/30 hover:text-white/50 transition-colors"
+                >
+                  <Info className="h-3 w-3" /> Документация по биллингу
+                </a>
+              </div>
             </div>
           ) : (
             <>
@@ -225,7 +236,7 @@ const Assistant: React.FC = () => {
                       {msg.sources && (
                         <div className="mt-4 pt-3 border-t border-white/5">
                           <p className="text-[9px] text-white/40 mb-2 flex items-center gap-1 uppercase font-bold tracking-widest">
-                            <Globe className="h-3 w-3" /> Проверенные источники:
+                            <Globe className="h-3 w-3" /> Источники данных:
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {msg.sources.map((s, i) => (
@@ -236,7 +247,7 @@ const Assistant: React.FC = () => {
                                 rel="noreferrer" 
                                 className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-sky-400 border border-white/10 hover:bg-sky-500/20 hover:text-white transition-all flex items-center gap-1"
                               >
-                                {s.title?.substring(0, 30) || 'Документ'}...
+                                {s.title?.substring(0, 30) || 'Ссылка'}...
                                 <ExternalLink className="h-2 w-2" />
                               </a>
                             ))}
@@ -249,7 +260,7 @@ const Assistant: React.FC = () => {
                 {isLoading && (
                   <div className="flex items-center gap-3 text-slate-400 text-[11px] p-2 bg-white/5 rounded-xl border border-white/5 animate-pulse">
                     <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> 
-                    <span>ИИ анализирует документацию и выполняет поиск...</span>
+                    <span>ИИ анализирует сеть и стандарты...</span>
                   </div>
                 )}
                 {errorStatus && (
@@ -268,7 +279,7 @@ const Assistant: React.FC = () => {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Ваш технический запрос..."
+                    placeholder="Запрос по АСУ ТП или ГОСТ..."
                     className="w-full rounded-2xl bg-[#0b0f1a] border border-white/10 py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50 placeholder:text-white/20 transition-all shadow-inner"
                   />
                   <button 
@@ -278,14 +289,6 @@ const Assistant: React.FC = () => {
                   >
                     <Send className="h-4 w-4" />
                   </button>
-                </div>
-                <div className="mt-3 flex items-center justify-between px-1">
-                  <p className="text-[8px] text-white/20 uppercase tracking-[0.2em]">
-                    Sistemotech Expert • G3 Pro
-                  </p>
-                  <p className="text-[8px] text-white/20">
-                    ГОСТ Р 59793 Compliance
-                  </p>
                 </div>
               </div>
             </>
