@@ -8,6 +8,7 @@ import HowItWorks from './components/HowItWorks';
 import Pricing from './components/Pricing';
 import Footer from './components/Footer';
 import SnowEffect from './components/SnowEffect';
+import Assistant from './components/Assistant';
 
 const App: React.FC = () => {
   return (
@@ -32,6 +33,9 @@ const App: React.FC = () => {
         </main>
         <Footer />
       </div>
+
+      {/* AI Assistant Layer */}
+      <Assistant />
     </div>
   );
 };
