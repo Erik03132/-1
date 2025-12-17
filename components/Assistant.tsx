@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Bot, User, Loader2, Globe, Trash2, AlertCircle } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
+// Версия компонента: 2.1.0 (Стабильный поиск и история)
 const KNOWLEDGE_BASE = `
 Вы — официальный ИИ-ассистент инженерного офиса "Системотех". 
 Специализация: АСУ ТП, аудит, проектирование, программирование ПЛК/SCADA.
@@ -47,36 +48,45 @@ const Assistant: React.FC = () => {
     setInput('');
     setErrorStatus(null);
     
+    // Добавляем сообщение пользователя в UI
     const updatedMessages = [...messages, { role: 'user' as const, text: userMessage }];
     setMessages(updatedMessages);
     setIsLoading(true);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const apiKey = process.env.API_KEY;
       
-      // API Gemini требует, чтобы история начиналась с 'user' и строго чередовалась.
-      // Отфильтровываем начальное приветствие ассистента из истории для модели.
-      const chatHistory = updatedMessages
-        .filter((m, i) => !(i === 0 && m.role === 'assistant'))
-        .slice(0, -1) // Берем всё кроме последнего (текущего) сообщения
+      if (!apiKey) {
+        throw new Error("API_KEY не обнаружен. Убедитесь, что переменная добавлена в Vercel Settings -> Environment Variables и сделан RE-DEPLOY.");
+      }
+
+      const ai = new GoogleGenAI({ apiKey });
+      
+      /**
+       * Формируем массив contents для generateContent.
+       * История должна начинаться с 'user' и чередоваться: user, model, user...
+       */
+      const historyForAPI = updatedMessages
+        .filter((m, i) => !(i === 0 && m.role === 'assistant')) // Пропускаем начальное приветствие ассистента
         .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.text }]
         }));
 
-      const chat = ai.chats.create({
-        model: 'gemini-3-pro-preview',
+      // Используем прямой вызов generateContent для стабильной работы инструментов поиска
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: historyForAPI,
         config: {
           systemInstruction: KNOWLEDGE_BASE,
           tools: [{ googleSearch: {} }],
         },
-        history: chatHistory
       });
 
-      const result = await chat.sendMessage({ message: userMessage });
-      const assistantText = result.text || "Не удалось получить текстовый ответ.";
+      const assistantText = response.text || "Извините, не удалось получить текстовый ответ от системы.";
       
-      const groundingChunks = result.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+      // Извлекаем ссылки из данных заземления (Google Search)
+      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const sources = groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
 
       setMessages(prev => [...prev, { 
@@ -85,12 +95,13 @@ const Assistant: React.FC = () => {
         sources: sources.length > 0 ? sources : undefined
       }]);
     } catch (error: any) {
-      console.error("Assistant Error:", error);
-      const msg = error?.message || "Неизвестная ошибка";
-      setErrorStatus(msg);
+      console.error("Assistant API Error:", error);
+      const errorMessage = error?.message || "Неизвестная ошибка связи с ИИ.";
+      setErrorStatus(errorMessage);
+      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        text: `Внимание: возникла техническая проблема. ${msg.includes('API_KEY') ? 'Проверьте API_KEY на Vercel.' : 'Попробуйте очистить чат или повторить запрос позже.'}` 
+        text: `Ошибка: ${errorMessage.includes('API Key') ? 'Проблема с API ключом в настройках Vercel.' : 'Не удалось выполнить запрос.'}` 
       }]);
     } finally {
       setIsLoading(false);
@@ -154,12 +165,12 @@ const Assistant: React.FC = () => {
                     {msg.sources && (
                       <div className="mt-3 pt-2 border-t border-white/5">
                         <p className="text-[10px] text-white/30 mb-2 flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> Источники:
+                          <Globe className="h-3 w-3" /> Источники из сети:
                         </p>
                         <div className="flex flex-wrap gap-1">
                           {msg.sources.map((s: any, i: number) => (
                             <a key={i} href={s.uri} target="_blank" rel="noreferrer" className="text-[10px] px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500 hover:text-white transition-all">
-                              {s.title || 'Подробнее'}
+                              {s.title || 'Источник'}
                             </a>
                           ))}
                         </div>
@@ -171,13 +182,13 @@ const Assistant: React.FC = () => {
             ))}
             {isLoading && (
               <div className="flex items-center gap-2 text-slate-400 text-xs p-2 animate-pulse">
-                <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> Инженер подбирает решение...
+                <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> Формируем ответ...
               </div>
             )}
             {errorStatus && (
-              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[10px] leading-tight break-words">
                 <AlertCircle className="h-4 w-4 shrink-0" />
-                <p>Ошибка: {errorStatus.slice(0, 100)}...</p>
+                <p>Системная ошибка: {errorStatus}</p>
               </div>
             )}
             <div ref={messagesEndRef} />
@@ -191,7 +202,7 @@ const Assistant: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Задайте вопрос..."
+                placeholder="Задайте технический вопрос..."
                 className="w-full rounded-xl bg-white/5 border border-white/10 py-3 pl-4 pr-12 text-sm text-white placeholder:text-white/20 focus:outline-none focus:ring-1 focus:ring-sky-500 transition-all"
               />
               <button 
@@ -203,7 +214,7 @@ const Assistant: React.FC = () => {
               </button>
             </div>
             <p className="mt-2 text-[9px] text-center text-white/20 uppercase tracking-widest">
-              Системотех • Powered by Gemini 3 Pro
+              Системотех • Powered by Gemini 3 Flash
             </p>
           </div>
         </div>
