@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Bot, User, Loader2, Globe } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 
-// Knowledge Base extracted from site content
 const KNOWLEDGE_BASE = `
 Вы — официальный ИИ-ассистент компании "Системотех". 
 Ваша задача: отвечать на вопросы о компании, услугах и автоматизации (АСУ ТП).
@@ -47,8 +46,10 @@ const Assistant: React.FC = () => {
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    if (isOpen) {
+      scrollToBottom();
+    }
+  }, [messages, isLoading, isOpen]);
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
@@ -59,23 +60,27 @@ const Assistant: React.FC = () => {
     setIsLoading(true);
 
     try {
+      // Инициализируем AI прямо перед вызовом
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: [
-          ...messages.map(m => ({
-            role: m.role === 'assistant' ? 'model' : 'user',
-            parts: [{ text: m.text }]
-          })),
-          { role: 'user', parts: [{ text: userMessage }] }
-        ],
+      
+      // Формируем историю для чата (пропускаем первое приветственное сообщение, так как оно не в контексте API)
+      const chatHistory = messages.slice(1).map(m => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      }));
+
+      const chat = ai.chats.create({
+        model: 'gemini-3-pro-preview',
         config: {
           systemInstruction: KNOWLEDGE_BASE,
           tools: [{ googleSearch: {} }],
         },
+        history: chatHistory
       });
 
-      const assistantText = response.text || "Извините, я не смог сформулировать ответ. Попробуйте еще раз.";
+      const response = await chat.sendMessage({ message: userMessage });
+      
+      const assistantText = response.text || "Извините, я не смог сформулировать ответ.";
       const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
       const sources = groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
 
@@ -85,8 +90,15 @@ const Assistant: React.FC = () => {
         sources: sources.length > 0 ? sources : undefined
       }]);
     } catch (error) {
-      console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: 'assistant', text: 'Произошла ошибка при связи с сервером. Пожалуйста, попробуйте позже.' }]);
+      console.error("Assistant API Error:", error);
+      let errorMessage = 'Произошла ошибка при связи с сервером. Пожалуйста, попробуйте позже.';
+      
+      // Проверка на отсутствие API ключа
+      if (!process.env.API_KEY) {
+        errorMessage = 'Ошибка: API ключ не настроен в окружении.';
+      }
+
+      setMessages(prev => [...prev, { role: 'assistant', text: errorMessage }]);
     } finally {
       setIsLoading(false);
     }
@@ -99,6 +111,7 @@ const Assistant: React.FC = () => {
         <button
           onClick={() => setIsOpen(true)}
           className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 to-indigo-600 text-white shadow-lg shadow-sky-500/30 transition-all hover:scale-110 active:scale-95 animate-glow"
+          aria-label="Открыть ассистента"
         >
           <MessageSquare className="h-6 w-6" />
           <span className="absolute -top-1 -right-1 flex h-4 w-4">
@@ -110,7 +123,7 @@ const Assistant: React.FC = () => {
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="flex h-[550px] w-[350px] sm:w-[400px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1a]/95 shadow-2xl backdrop-blur-2xl animate-scale-in">
+        <div className="flex h-[550px] w-[350px] sm:w-[400px] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#0b0f1a]/95 shadow-2xl backdrop-blur-2xl animate-scale-in origin-bottom-right">
           {/* Header */}
           <div className="flex items-center justify-between bg-gradient-to-r from-sky-500/20 to-indigo-600/20 p-4 border-b border-white/5">
             <div className="flex items-center gap-3">
@@ -136,14 +149,14 @@ const Assistant: React.FC = () => {
           {/* Messages Area */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-thin scrollbar-thumb-white/10">
             {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}>
                 <div className={`flex max-w-[85%] items-start gap-2.5 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-sky-500/20 border border-sky-500/30 text-sky-400'}`}>
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-white ${msg.role === 'user' ? 'bg-indigo-600 shadow-md shadow-indigo-500/20' : 'bg-sky-500/20 border border-sky-500/30 text-sky-400'}`}>
                     {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                   </div>
                   <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                     msg.role === 'user' 
-                      ? 'bg-indigo-600 text-white rounded-tr-none' 
+                      ? 'bg-indigo-600 text-white rounded-tr-none shadow-lg' 
                       : 'bg-white/5 border border-white/10 text-slate-200 rounded-tl-none'
                   }`}>
                     {msg.text}
@@ -151,7 +164,7 @@ const Assistant: React.FC = () => {
                     {msg.sources && msg.sources.length > 0 && (
                       <div className="mt-3 pt-2 border-t border-white/10">
                         <p className="text-[10px] text-white/40 mb-2 flex items-center gap-1">
-                          <Globe className="h-3 w-3" /> Источники из сети:
+                          <Globe className="h-3 w-3" /> Найдено в интернете:
                         </p>
                         <div className="flex flex-wrap gap-2">
                           {msg.sources.map((source: any, sIdx: number) => (
@@ -160,9 +173,9 @@ const Assistant: React.FC = () => {
                               href={source.uri} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="text-[10px] px-2 py-1 rounded bg-white/5 border border-white/5 text-sky-400 hover:bg-white/10 transition-colors truncate max-w-[120px]"
+                              className="text-[10px] px-2 py-1 rounded bg-white/5 border border-white/5 text-sky-400 hover:bg-sky-500 hover:text-white transition-all truncate max-w-[140px]"
                             >
-                              {source.title || 'Ссылка'}
+                              {source.title || 'Источник'}
                             </a>
                           ))}
                         </div>
@@ -173,10 +186,10 @@ const Assistant: React.FC = () => {
               </div>
             ))}
             {isLoading && (
-              <div className="flex justify-start animate-fade-in">
+              <div className="flex justify-start">
                 <div className="flex items-center gap-2.5 rounded-2xl bg-white/5 border border-white/10 px-4 py-2 text-sm text-slate-400">
                   <Loader2 className="h-4 w-4 animate-spin text-sky-400" />
-                  Инженер думает...
+                  Инженер анализирует...
                 </div>
               </div>
             )}
@@ -191,7 +204,7 @@ const Assistant: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Спросите об АСУ ТП..."
+                placeholder="Ваш вопрос по АСУ ТП..."
                 className="w-full rounded-xl bg-[#0b0f1a] border border-white/10 py-3 pl-4 pr-12 text-sm text-white placeholder:text-white/30 focus:outline-none focus:ring-2 focus:ring-sky-500/50 transition-all shadow-inner"
               />
               <button
@@ -203,7 +216,7 @@ const Assistant: React.FC = () => {
               </button>
             </div>
             <p className="mt-2 text-[10px] text-center text-white/20">
-              База знаний обновлена. Подключен Google Search.
+              База знаний Системотех + Поиск Google
             </p>
           </div>
         </div>
