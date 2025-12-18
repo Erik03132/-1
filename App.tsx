@@ -8,13 +8,12 @@ import HowItWorks from './components/HowItWorks';
 import Pricing from './components/Pricing';
 import Footer from './components/Footer';
 import SnowEffect from './components/SnowEffect';
-import Assistant from './components/Assistant';
 
 const App: React.FC = () => {
   return (
     <div className="font-inter min-h-screen text-slate-100 overflow-x-hidden selection:bg-sky-500/30 selection:text-sky-200 relative">
       
-      {/* Background Layer: Particles (z-minus-10 inside SnowEffect component) */}
+      {/* Background Layer: Particles */}
       <SnowEffect />
       
       {/* Subtle overlay for better text contrast and atmosphere */}
@@ -33,9 +32,6 @@ const App: React.FC = () => {
         </main>
         <Footer />
       </div>
-
-      {/* AI Assistant Layer */}
-      <Assistant />
     </div>
   );
 };

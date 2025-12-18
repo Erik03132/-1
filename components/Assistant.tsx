@@ -1,7 +1,6 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, Send, X, Bot, Loader2, Globe, Trash2, AlertCircle, Key, ExternalLink, ShieldCheck, Info } from 'lucide-react';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 declare global {
   interface AIStudio {
@@ -10,20 +9,19 @@ declare global {
   }
 
   interface Window {
-    // Added optional modifier to match existing global property definition
     aistudio?: AIStudio;
   }
 }
 
 const KNOWLEDGE_BASE = `
 Вы — ведущий экспертный ИИ-ассистент инженерного офиса "Системотех". 
-Ваша специализация: промышленная автоматизация (АСУ ТП), проектирование систем управления, программирование ПЛК (S7-1200/1500, ОВЕН, Segnetics), SCADA-системы и аудит безопасности.
+Ваша специализация: промышленная автоматизация (АСУ ТП), проектирование систем управления, программирование ПЛК, SCADA-системы и аудит безопасности.
 
 ПРАВИЛА ОТВЕТОВ:
 1. Формат: Технически точный, структурированный, лаконичный. Используйте списки и выделение жирным.
-2. Поиск: ОБЯЗАТЕЛЬНО используйте Google Search для проверки актуальных версий ГОСТ и подбора современных аналогов оборудования.
+2. Поиск: Используйте Google Search для проверки актуальных версий ГОСТ и подбора аналогов оборудования.
 3. Язык: Строго русский.
-4. Этикета: Вежливость, профессионализм. Вы — часть команды "Системотех".
+4. Вы — часть команды "Системотех". Отвечайте быстро и по делу.
 `;
 
 const Assistant: React.FC = () => {
@@ -32,7 +30,7 @@ const Assistant: React.FC = () => {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; sources?: any[] }[]>([
     { 
       role: 'assistant', 
-      text: 'Инженерный офис "Системотех" приветствует вас. Биллинг подтвержден, поиск по ГОСТ и базам оборудования активен. Какой узел автоматизации обсудим?' 
+      text: 'Инженерный офис "Системотех" на связи. Готов к расчету архитектуры или поиску стандартов. Чем могу помочь?' 
     }
   ]);
   const [input, setInput] = useState('');
@@ -71,7 +69,6 @@ const Assistant: React.FC = () => {
     if (window.aistudio) {
       try {
         await window.aistudio.openSelectKey();
-        // После вызова диалога считаем выбор успешным, чтобы пользователь мог продолжить
         setHasKey(true);
         setErrorStatus(null);
       } catch (e) {
@@ -83,7 +80,7 @@ const Assistant: React.FC = () => {
   const clearChat = () => {
     setMessages([{ 
       role: 'assistant', 
-      text: 'Сессия перезапущена. Я готов к расчету архитектуры или аудиту вашей документации.' 
+      text: 'Сессия перезапущена. Я готов к работе.' 
     }]);
     setErrorStatus(null);
   };
@@ -95,23 +92,25 @@ const Assistant: React.FC = () => {
     setInput('');
     setErrorStatus(null);
     
-    const updatedMessages = [...messages, { role: 'user' as const, text: userMessage }];
-    setMessages(updatedMessages);
+    const currentMessages = [...messages, { role: 'user' as const, text: userMessage }];
+    setMessages(currentMessages);
     setIsLoading(true);
 
+    // Подготавливаем пустое сообщение для стриминга
+    setMessages(prev => [...prev, { role: 'assistant', text: '' }]);
+
     try {
-      // Всегда создаем новый экземпляр перед запросом, чтобы использовать актуальный ключ
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const historyForAPI = updatedMessages
+      const historyForAPI = currentMessages
         .filter((m, i) => !(i === 0 && m.role === 'assistant'))
         .map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.text }]
         }));
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-pro-preview',
+      const responseStream = await ai.models.generateContentStream({
+        model: 'gemini-3-flash-preview', // Используем Flash для скорости
         contents: historyForAPI,
         config: {
           systemInstruction: KNOWLEDGE_BASE,
@@ -119,31 +118,64 @@ const Assistant: React.FC = () => {
         },
       });
 
-      const assistantText = response.text || "Не удалось сформировать ответ. Проверьте настройки API.";
-      
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-      const sources = groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
+      let fullText = "";
+      let groundingMetadata: any = null;
 
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        text: assistantText,
-        sources: sources.length > 0 ? sources : undefined
-      }]);
+      for await (const chunk of responseStream) {
+        const chunkResponse = chunk as GenerateContentResponse;
+        const textChunk = chunkResponse.text || "";
+        fullText += textChunk;
+        
+        // Захватываем метаданные поиска из чанков, если они есть
+        if (chunkResponse.candidates?.[0]?.groundingMetadata) {
+          groundingMetadata = chunkResponse.candidates[0].groundingMetadata;
+        }
+
+        // Обновляем последнее сообщение (ответ ассистента) в реальном времени
+        setMessages(prev => {
+          const newMessages = [...prev];
+          const lastMsg = newMessages[newMessages.length - 1];
+          if (lastMsg && lastMsg.role === 'assistant') {
+            lastMsg.text = fullText;
+          }
+          return newMessages;
+        });
+      }
+
+      // После завершения стрима добавляем источники
+      if (groundingMetadata?.groundingChunks) {
+        const sources = groundingMetadata.groundingChunks.map((chunk: any) => chunk.web).filter(Boolean);
+        if (sources.length > 0) {
+          setMessages(prev => {
+            const newMessages = [...prev];
+            const lastMsg = newMessages[newMessages.length - 1];
+            if (lastMsg && lastMsg.role === 'assistant') {
+              lastMsg.sources = sources;
+            }
+            return newMessages;
+          });
+        }
+      }
+
     } catch (error: any) {
       console.error("Gemini API Error:", error);
       const msg = error?.message || "";
       
       if (msg.includes("Requested entity was not found") || msg.includes("API Key") || msg.includes("invalid")) {
         setHasKey(false);
-        setErrorStatus("Ошибка авторизации. Пожалуйста, выберите ключ заново.");
+        setErrorStatus("Ошибка авторизации. Выберите ключ повторно.");
       } else {
-        setErrorStatus(`Ошибка: ${msg}`);
+        setErrorStatus(`Ошибка связи: ${msg}`);
       }
       
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        text: "Произошла ошибка связи. Убедитесь, что ваш API ключ привязан к проекту с включенной оплатой (Billing)." 
-      }]);
+      setMessages(prev => {
+        const newMessages = [...prev];
+        const lastMsg = newMessages[newMessages.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant' && lastMsg.text === "") {
+          lastMsg.text = "Произошла ошибка. Проверьте подключение и API-ключ.";
+        }
+        return newMessages;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -172,7 +204,7 @@ const Assistant: React.FC = () => {
                 <h3 className="text-sm font-bold text-white leading-none">Системотех Эксперт</h3>
                 <div className="flex items-center gap-1.5 mt-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">G3 PRO • СЕРВИС АКТИВЕН</span>
+                  <span className="text-[10px] text-emerald-400 font-medium uppercase tracking-wider">Flash Mode • Скоростной доступ</span>
                 </div>
               </div>
             </div>
@@ -193,7 +225,7 @@ const Assistant: React.FC = () => {
               </div>
               <h4 className="text-white font-semibold text-lg mb-2">Настройка доступа</h4>
               <p className="text-sm text-white/50 leading-relaxed mb-8">
-                Для активации поиска по ГОСТ и использования модели Pro, необходимо выбрать API ключ, привязанный к вашему платному проекту в Google Cloud.
+                Для работы скоростной модели и поиска в реальном времени выберите ваш API ключ.
               </p>
               
               <button
@@ -212,14 +244,6 @@ const Assistant: React.FC = () => {
                 >
                   <ExternalLink className="h-3 w-3" /> Создать ключ в AI Studio
                 </a>
-                <a 
-                  href="https://ai.google.dev/gemini-api/docs/billing" 
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="flex items-center justify-center gap-2 text-[11px] text-white/30 hover:text-white/50 transition-colors"
-                >
-                  <Info className="h-3 w-3" /> Документация по биллингу
-                </a>
               </div>
             </div>
           ) : (
@@ -232,11 +256,13 @@ const Assistant: React.FC = () => {
                         ? 'bg-sky-600 text-white rounded-tr-none' 
                         : 'bg-white/5 text-slate-200 border border-white/10 rounded-tl-none'
                     }`}>
-                      <div className="whitespace-pre-wrap">{msg.text}</div>
+                      <div className="whitespace-pre-wrap">
+                        {msg.text || (msg.role === 'assistant' && isLoading && idx === messages.length - 1 ? "..." : "")}
+                      </div>
                       {msg.sources && (
                         <div className="mt-4 pt-3 border-t border-white/5">
                           <p className="text-[9px] text-white/40 mb-2 flex items-center gap-1 uppercase font-bold tracking-widest">
-                            <Globe className="h-3 w-3" /> Источники данных:
+                            <Globe className="h-3 w-3" /> Источники:
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {msg.sources.map((s, i) => (
@@ -247,7 +273,7 @@ const Assistant: React.FC = () => {
                                 rel="noreferrer" 
                                 className="text-[9px] px-2 py-1 rounded-md bg-white/5 text-sky-400 border border-white/10 hover:bg-sky-500/20 hover:text-white transition-all flex items-center gap-1"
                               >
-                                {s.title?.substring(0, 30) || 'Ссылка'}...
+                                {s.title?.substring(0, 25) || 'Ссылка'}...
                                 <ExternalLink className="h-2 w-2" />
                               </a>
                             ))}
@@ -257,10 +283,10 @@ const Assistant: React.FC = () => {
                     </div>
                   </div>
                 ))}
-                {isLoading && (
+                {isLoading && messages[messages.length - 1]?.text === "" && (
                   <div className="flex items-center gap-3 text-slate-400 text-[11px] p-2 bg-white/5 rounded-xl border border-white/5 animate-pulse">
                     <Loader2 className="h-3 w-3 animate-spin text-sky-400" /> 
-                    <span>ИИ анализирует сеть и стандарты...</span>
+                    <span>Подключаюсь к поиску и формирую ответ...</span>
                   </div>
                 )}
                 {errorStatus && (
@@ -279,7 +305,7 @@ const Assistant: React.FC = () => {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Запрос по АСУ ТП или ГОСТ..."
+                    placeholder="Ваш запрос..."
                     className="w-full rounded-2xl bg-[#0b0f1a] border border-white/10 py-4 pl-5 pr-14 text-sm text-white focus:outline-none focus:ring-2 focus:ring-sky-500/50 placeholder:text-white/20 transition-all shadow-inner"
                   />
                   <button 
