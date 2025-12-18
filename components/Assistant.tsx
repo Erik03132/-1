@@ -13,7 +13,7 @@ declare global {
   }
 }
 
-const SYSTEM_INSTRUCTION = "Вы — инженерный ассистент Системотех. Отвечайте коротко и профессионально на вопросы по АСУ ТП и ГОСТ. Не используйте Markdown (никаких звездочек и решеток).";
+const SYSTEM_INSTRUCTION = "Вы — инженерный ассистент Системотех. Отвечайте коротко и профессионально на русском языке. Тематика: АСУ ТП, ГОСТ, промышленная автоматизация. Не используйте Markdown разметку (*, #, `).";
 
 const Assistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -21,7 +21,7 @@ const Assistant: React.FC = () => {
   const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
     { 
       role: 'assistant', 
-      text: 'Инженерный ассистент Системотех. Чем могу помочь?' 
+      text: 'Инженерный ассистент Системотех на связи. Задайте ваш вопрос по АСУ ТП.' 
     }
   ]);
   const [input, setInput] = useState('');
@@ -42,7 +42,6 @@ const Assistant: React.FC = () => {
   const handleOpenKeyDialog = async () => {
     if (window.aistudio) {
       await window.aistudio.openSelectKey();
-      // Согласно правилам, предполагаем успех сразу после открытия диалога
       setHasKey(true);
       setError(null);
     }
@@ -59,25 +58,31 @@ const Assistant: React.FC = () => {
     setMessages(newMessages);
     setIsLoading(true);
     
-    // Placeholder для ответа ассистента
+    // Добавляем пустой ответ ассистента для анимации загрузки
     setMessages(prev => [...prev, { role: 'assistant', text: '' }]);
 
     try {
-      // Использование gemini-flash-latest как наиболее стабильного варианта
+      // Инициализируем AI с актуальным ключом
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-flash-latest',
-        contents: newMessages.map(m => ({
-          role: m.role === 'user' ? 'user' : 'model',
-          parts: [{ text: m.text }]
-        })),
+      
+      // Используем Chat API для лучшей обработки контекста
+      const chat = ai.chats.create({
+        model: 'gemini-3-flash-preview',
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
         },
+        // Передаем историю (исключая последний пустой ответ ассистента)
+        history: messages.map(m => ({
+          role: m.role === 'user' ? 'user' : 'model',
+          parts: [{ text: m.text }]
+        }))
       });
 
-      const text = response.text || "Нет ответа от системы.";
-      const cleanText = text.replace(/[*#_~`]/g, '');
+      const result = await chat.sendMessage({ message: userText });
+      const responseText = result.text || "Пустой ответ от модели.";
+      
+      // Очистка от markdown
+      const cleanText = responseText.replace(/[*#_~`]/g, '');
 
       setMessages(prev => {
         const updated = [...prev];
@@ -89,17 +94,20 @@ const Assistant: React.FC = () => {
       });
 
     } catch (err: any) {
-      console.error("Assistant Error:", err);
-      const msg = (err.message || "").toLowerCase();
+      console.error("Full API Error:", err);
       
-      if (msg.includes("not found") || msg.includes("404") || msg.includes("403")) {
-        setHasKey(false);
-        setError("Модель не найдена (404). Это обычно означает, что ваш API ключ не привязан к платному аккаунту Google Cloud. Пожалуйста, выберите ключ от проекта с включенным биллингом.");
+      // Выводим детальное сообщение об ошибке для диагностики
+      const apiErrorMessage = err.message || "Неизвестная ошибка API";
+      
+      if (apiErrorMessage.includes("404") || apiErrorMessage.includes("not found")) {
+        setError(`Модель не найдена (404). Попробуйте сменить API ключ на проект с включенным биллингом или выбрать другую модель.`);
+      } else if (apiErrorMessage.includes("403") || apiErrorMessage.includes("permission")) {
+        setError(`Ошибка доступа (403). У вашего ключа нет прав на использование этой модели.`);
       } else {
-        setError("Произошла техническая ошибка. Пожалуйста, попробуйте сменить API ключ или обновить страницу.");
+        setError(`Ошибка ИИ: ${apiErrorMessage}`);
       }
       
-      // Удаляем пустой placeholder
+      // Удаляем пустой ответ при ошибке
       setMessages(prev => prev.filter((m, i) => !(m.role === 'assistant' && m.text === "" && i === prev.length - 1)));
     } finally {
       setIsLoading(false);
@@ -107,7 +115,7 @@ const Assistant: React.FC = () => {
   };
 
   const clearChat = () => {
-    setMessages([{ role: 'assistant', text: 'Чат очищен. Готов к вопросам.' }]);
+    setMessages([{ role: 'assistant', text: 'История очищена. Жду ваших вопросов.' }]);
     setError(null);
   };
 
@@ -137,7 +145,7 @@ const Assistant: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={clearChat} className="p-2 text-white/30 hover:text-rose-400 transition-colors">
+              <button onClick={clearChat} className="p-2 text-white/30 hover:text-rose-400 transition-colors" title="Очистить чат">
                 <Trash2 className="h-4 w-4" />
               </button>
               <button onClick={() => setIsOpen(false)} className="p-2 text-white/30 hover:text-white transition-colors">
@@ -149,25 +157,25 @@ const Assistant: React.FC = () => {
           {!hasKey ? (
             <div className="flex flex-1 flex-col items-center justify-center p-10 text-center bg-grid-pattern">
               <Key className="h-12 w-12 text-amber-400 mb-6" />
-              <h4 className="text-white font-bold text-xl mb-4">Нужен платный доступ</h4>
+              <h4 className="text-white font-bold text-xl mb-4">Требуется платный ключ</h4>
               <p className="text-sm text-white/50 mb-8 leading-relaxed">
-                Для стабильной работы новых моделей требуется API ключ от платного проекта Google Cloud (Pay-as-you-go). Бесплатные ключи часто ограничивают доступ.
+                Для доступа к моделям серии Gemini 3 необходим API ключ от проекта Google Cloud с привязанным методом оплаты (Pay-as-you-go).
               </p>
               
               <button 
                 onClick={handleOpenKeyDialog}
                 className="w-full rounded-2xl bg-sky-600 py-4 font-bold text-white shadow-xl hover:bg-sky-500 transition-all active:scale-95 mb-4"
               >
-                Выбрать платный API Ключ
+                Выбрать платный ключ
               </button>
 
-              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[11px] text-sky-400 hover:underline flex items-center justify-center gap-1.5">
-                О биллинге Gemini API <ExternalLink className="h-3 w-3" />
+              <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[11px] text-sky-400 hover:underline flex items-center justify-center gap-1.5 font-medium">
+                Инструкция по биллингу <ExternalLink className="h-3 w-3" />
               </a>
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 scrollbar-hide">
                 {messages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
                     <div className={`max-w-[85%] rounded-[1.5rem] p-4 text-[13px] leading-relaxed ${
@@ -182,7 +190,7 @@ const Assistant: React.FC = () => {
                 {isLoading && messages[messages.length - 1].text === "" && (
                   <div className="flex items-center gap-3 text-[11px] text-sky-400 font-bold bg-sky-500/5 w-fit p-4 rounded-2xl border border-sky-500/10 animate-pulse">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Анализирую запрос...</span>
+                    <span>Инженерный анализ...</span>
                   </div>
                 )}
                 {error && (
@@ -190,12 +198,12 @@ const Assistant: React.FC = () => {
                     <div className="flex items-start gap-3">
                       <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
                       <div className="space-y-3">
-                        <p className="font-medium">{error}</p>
+                        <p className="font-medium leading-snug">{error}</p>
                         <button 
                           onClick={handleOpenKeyDialog}
                           className="flex items-center gap-2 text-white bg-rose-500/30 hover:bg-rose-500/50 px-4 py-2 rounded-xl transition-all font-bold text-[10px] uppercase tracking-wider"
                         >
-                          <RefreshCcw className="h-3 w-3" /> Сменить Ключ
+                          <RefreshCcw className="h-3 w-3" /> Обновить ключ
                         </button>
                       </div>
                     </div>
@@ -217,14 +225,14 @@ const Assistant: React.FC = () => {
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="absolute right-2 rounded-xl p-2.5 text-sky-400 hover:text-sky-300 disabled:opacity-20 transition-all"
+                    className="absolute right-2 rounded-xl p-2.5 text-sky-400 hover:text-sky-300 disabled:opacity-20 transition-all active:scale-90"
                   >
                     <Send className="h-5 w-5" />
                   </button>
                 </div>
                 <div className="mt-4 flex items-center justify-between px-1 opacity-40">
                    <div className="flex items-center gap-2 text-[9px] text-white uppercase font-black tracking-widest">
-                      <ShieldCheck className="h-3 w-3" /> ГОСТ Стандарт
+                      <ShieldCheck className="h-3 w-3" /> Инженерный стандарт
                    </div>
                    <div className="flex items-center gap-2 text-[9px] text-white uppercase font-black tracking-widest">
                       <MessageSquare className="h-3 w-3" /> Real-time
