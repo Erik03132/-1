@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, X, Bot, Loader2, Globe, Trash2, AlertCircle, Key, ExternalLink, ShieldCheck, Zap, RefreshCcw, MessageSquare } from 'lucide-react';
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { Send, X, Bot, Loader2, Trash2, AlertCircle, Key, ExternalLink, ShieldCheck, Zap, RefreshCcw, MessageSquare } from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 
 declare global {
   interface AIStudio {
@@ -13,23 +13,15 @@ declare global {
   }
 }
 
-const SYSTEM_INSTRUCTION = `
-Вы — "Системотех ИИ", экспертный инженерный ассистент компании "Системотех".
-Ваша специализация: Промышленная автоматизация (АСУ ТП), проектирование по ГОСТ (34.602, 19.xxx, 21.xxx), импортозамещение.
-ЦЕЛЬ: Предоставлять точные, профессиональные ответы инженерам.
-ПРАВИЛА:
-1. Не используйте Markdown-разметку (никаких *, **, #). Только чистый текст.
-2. Если вопрос касается стандартов, ссылайтесь на конкретные номера ГОСТ.
-3. Будьте лаконичны.
-`;
+const SYSTEM_INSTRUCTION = "Вы — инженерный ассистент Системотех. Отвечайте коротко и профессионально на вопросы по АСУ ТП и ГОСТ. Не используйте Markdown (никаких звездочек и решеток).";
 
 const Assistant: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [hasKey, setHasKey] = useState<boolean>(true);
-  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string; sources?: {uri: string, title: string}[] }[]>([
+  const [messages, setMessages] = useState<{ role: 'user' | 'assistant'; text: string }[]>([
     { 
       role: 'assistant', 
-      text: 'Инженерный ассистент Системотех готов к работе. Чем я могу помочь в области АСУ ТП?' 
+      text: 'Инженерный ассистент Системотех. Чем могу помочь?' 
     }
   ]);
   const [input, setInput] = useState('');
@@ -37,15 +29,10 @@ const Assistant: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const checkKey = async () => {
-    if (window.aistudio) {
-      const selected = await window.aistudio.hasSelectedApiKey();
-      setHasKey(selected);
-    }
-  };
-
   useEffect(() => {
-    if (isOpen) checkKey();
+    if (isOpen && window.aistudio) {
+      window.aistudio.hasSelectedApiKey().then(setHasKey);
+    }
   }, [isOpen]);
 
   useEffect(() => {
@@ -72,69 +59,47 @@ const Assistant: React.FC = () => {
     setMessages(newMessages);
     setIsLoading(true);
     
+    // Placeholder для ответа ассистента
     setMessages(prev => [...prev, { role: 'assistant', text: '' }]);
 
     try {
-      // Создаем экземпляр прямо перед вызовом для актуальности ключа
+      // Использование gemini-flash-latest как наиболее стабильного варианта
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-flash-latest',
         contents: newMessages.map(m => ({
           role: m.role === 'user' ? 'user' : 'model',
           parts: [{ text: m.text }]
         })),
         config: {
           systemInstruction: SYSTEM_INSTRUCTION,
-          tools: [{ googleSearch: {} }],
         },
       });
 
-      const rawText = response.text || "Не удалось получить ответ от системы.";
-      // Очистка от markdown для соответствия системной инструкции
-      const cleanText = rawText.replace(/[*#_~`]/g, '');
-      
-      const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-      let sources: {uri: string, title: string}[] = [];
-      if (groundingChunks) {
-        sources = groundingChunks
-          .map((chunk: any) => chunk.web)
-          .filter(Boolean)
-          .map((web: any) => ({ uri: web.uri, title: web.title }));
-      }
+      const text = response.text || "Нет ответа от системы.";
+      const cleanText = text.replace(/[*#_~`]/g, '');
 
       setMessages(prev => {
         const updated = [...prev];
         const lastIndex = updated.length - 1;
         if (updated[lastIndex].role === 'assistant') {
-          updated[lastIndex] = { role: 'assistant', text: cleanText, sources };
+          updated[lastIndex] = { role: 'assistant', text: cleanText };
         }
         return updated;
       });
 
     } catch (err: any) {
-      console.error("AI Assistant Detailed Error:", err);
-      const msg = (err.message || err.toString()).toLowerCase();
+      console.error("Assistant Error:", err);
+      const msg = (err.message || "").toLowerCase();
       
-      // Расширенная проверка на ошибки доступа и платного режима
-      const isAccessError = 
-        msg.includes("not found") || 
-        msg.includes("404") || 
-        msg.includes("403") || 
-        msg.includes("permission") || 
-        msg.includes("billing") || 
-        msg.includes("api key");
-
-      if (isAccessError) {
+      if (msg.includes("not found") || msg.includes("404") || msg.includes("403")) {
         setHasKey(false);
-        setError("Модель Gemini 3 Flash недоступна. Вероятно, ваш API ключ не привязан к платному аккаунту Google Cloud (Pay-as-you-go). Пожалуйста, выберите ключ от платного проекта.");
-      } else if (msg.includes("quota") || msg.includes("429")) {
-        setError("Превышены лимиты запросов. Попробуйте через минуту.");
+        setError("Модель не найдена (404). Это обычно означает, что ваш API ключ не привязан к платному аккаунту Google Cloud. Пожалуйста, выберите ключ от проекта с включенным биллингом.");
       } else {
-        setError("Произошла техническая ошибка. Возможно, выбранный API ключ не поддерживает Gemini 3. Попробуйте сменить ключ.");
+        setError("Произошла техническая ошибка. Пожалуйста, попробуйте сменить API ключ или обновить страницу.");
       }
       
-      // Удаляем пустую карточку ассистента
+      // Удаляем пустой placeholder
       setMessages(prev => prev.filter((m, i) => !(m.role === 'assistant' && m.text === "" && i === prev.length - 1)));
     } finally {
       setIsLoading(false);
@@ -142,7 +107,7 @@ const Assistant: React.FC = () => {
   };
 
   const clearChat = () => {
-    setMessages([{ role: 'assistant', text: 'Чат очищен. Готов к новым вопросам.' }]);
+    setMessages([{ role: 'assistant', text: 'Чат очищен. Готов к вопросам.' }]);
     setError(null);
   };
 
@@ -172,10 +137,10 @@ const Assistant: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={clearChat} className="p-2.5 text-white/30 hover:text-rose-400 transition-colors rounded-xl">
+              <button onClick={clearChat} className="p-2 text-white/30 hover:text-rose-400 transition-colors">
                 <Trash2 className="h-4 w-4" />
               </button>
-              <button onClick={() => setIsOpen(false)} className="p-2.5 text-white/30 hover:text-white transition-colors rounded-xl">
+              <button onClick={() => setIsOpen(false)} className="p-2 text-white/30 hover:text-white transition-colors">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -183,58 +148,41 @@ const Assistant: React.FC = () => {
 
           {!hasKey ? (
             <div className="flex flex-1 flex-col items-center justify-center p-10 text-center bg-grid-pattern">
-              <div className="mb-8 flex h-20 w-20 items-center justify-center rounded-3xl bg-amber-500/10 border border-amber-500/20">
-                <Key className="h-10 w-10 text-amber-400" />
-              </div>
-              <h4 className="text-white font-bold text-xl mb-3">Ошибка доступа</h4>
+              <Key className="h-12 w-12 text-amber-400 mb-6" />
+              <h4 className="text-white font-bold text-xl mb-4">Нужен платный доступ</h4>
               <p className="text-sm text-white/50 mb-8 leading-relaxed">
-                Для работы Gemini 3 требуется API ключ от платного проекта Google Cloud (с включенным биллингом). Бесплатные ключи часто блокируют доступ к новым моделям.
+                Для стабильной работы новых моделей требуется API ключ от платного проекта Google Cloud (Pay-as-you-go). Бесплатные ключи часто ограничивают доступ.
               </p>
               
               <button 
                 onClick={handleOpenKeyDialog}
-                className="w-full rounded-2xl bg-sky-600 py-4 font-bold text-white shadow-xl shadow-sky-600/20 hover:bg-sky-500 transition-all active:scale-95 mb-4"
+                className="w-full rounded-2xl bg-sky-600 py-4 font-bold text-white shadow-xl hover:bg-sky-500 transition-all active:scale-95 mb-4"
               >
                 Выбрать платный API Ключ
               </button>
 
               <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[11px] text-sky-400 hover:underline flex items-center justify-center gap-1.5">
-                О биллинге в Gemini API <ExternalLink className="h-3 w-3" />
+                О биллинге Gemini API <ExternalLink className="h-3 w-3" />
               </a>
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-y-auto p-5 space-y-5 scrollbar-thin">
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
                 {messages.map((m, i) => (
                   <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-slide-up`}>
-                    <div className={`max-w-[85%] rounded-[1.5rem] p-5 text-[13px] leading-relaxed ${
+                    <div className={`max-w-[85%] rounded-[1.5rem] p-4 text-[13px] leading-relaxed ${
                       m.role === 'user' 
                         ? 'bg-sky-600 text-white rounded-tr-none' 
                         : 'bg-white/5 text-slate-200 border border-white/10 rounded-tl-none'
                     }`}>
-                      <div className="whitespace-pre-wrap">{m.text}</div>
-                      {m.sources && m.sources.length > 0 && (
-                        <div className="mt-4 pt-4 border-t border-white/5">
-                          <p className="text-[9px] text-white/40 mb-3 uppercase font-bold tracking-widest flex items-center gap-2">
-                            <Globe className="h-3 w-3" /> Источники
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {m.sources.map((s, si) => (
-                              <a key={si} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-2 rounded-lg bg-white/5 px-2.5 py-1.5 text-[10px] text-sky-300 border border-white/5 hover:bg-white/10 transition-all">
-                                <span className="truncate max-w-[120px]">{s.title || 'Ссылка'}</span>
-                                <ExternalLink className="h-2.5 w-2.5" />
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
+                      {m.text}
                     </div>
                   </div>
                 ))}
                 {isLoading && messages[messages.length - 1].text === "" && (
                   <div className="flex items-center gap-3 text-[11px] text-sky-400 font-bold bg-sky-500/5 w-fit p-4 rounded-2xl border border-sky-500/10 animate-pulse">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Инженерный анализ...</span>
+                    <span>Анализирую запрос...</span>
                   </div>
                 )}
                 {error && (
@@ -264,12 +212,12 @@ const Assistant: React.FC = () => {
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
                     placeholder="Ваш технический вопрос..."
-                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f1a] py-4 pl-5 pr-14 text-[13px] text-white focus:border-sky-500/50 focus:outline-none placeholder:text-white/20 transition-all"
+                    className="w-full rounded-2xl border border-white/10 bg-[#0b0f1a] py-4 pl-5 pr-14 text-[13px] text-white focus:border-sky-500/50 outline-none transition-all shadow-inner"
                   />
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="absolute right-2 rounded-xl bg-sky-600 p-2.5 text-white hover:bg-sky-500 disabled:opacity-20 transition-all"
+                    className="absolute right-2 rounded-xl p-2.5 text-sky-400 hover:text-sky-300 disabled:opacity-20 transition-all"
                   >
                     <Send className="h-5 w-5" />
                   </button>
