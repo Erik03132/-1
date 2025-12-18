@@ -37,21 +37,17 @@ const Assistant: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const checkKey = async () => {
-    try {
-      if (window.aistudio) {
-        const selected = await window.aistudio.hasSelectedApiKey();
-        setHasKey(selected);
-      } else {
-        setHasKey(!!process.env.API_KEY);
-      }
-    } catch (e) {
-      setHasKey(false);
+  const checkKeyStatus = async () => {
+    if (window.aistudio) {
+      const selected = await window.aistudio.hasSelectedApiKey();
+      setHasKey(selected || !!process.env.API_KEY);
+    } else {
+      setHasKey(!!process.env.API_KEY);
     }
   };
 
   useEffect(() => {
-    if (isOpen) checkKey();
+    if (isOpen) checkKeyStatus();
   }, [isOpen]);
 
   useEffect(() => {
@@ -60,26 +56,15 @@ const Assistant: React.FC = () => {
 
   const handleSelectKey = async () => {
     if (window.aistudio) {
-      try {
-        await window.aistudio.openSelectKey();
-        setHasKey(true);
-        setError(null);
-      } catch (e) {
-        console.error("Key selection failed", e);
-      }
+      await window.aistudio.openSelectKey();
+      // Согласно правилам, предполагаем успех сразу после вызова окна
+      setHasKey(true);
+      setError(null);
     }
   };
 
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-
-    if (window.aistudio) {
-      const active = await window.aistudio.hasSelectedApiKey();
-      if (!active) {
-        setHasKey(false);
-        return;
-      }
-    }
 
     const userText = input.trim();
     setInput('');
@@ -91,6 +76,7 @@ const Assistant: React.FC = () => {
     setMessages(prev => [...prev, { role: 'assistant', text: '' }]);
 
     try {
+      // Всегда создаем новый экземпляр перед запросом для актуального ключа
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
       const responseStream = await ai.models.generateContentStream({
@@ -111,7 +97,6 @@ const Assistant: React.FC = () => {
 
       for await (const chunk of responseStream) {
         const chunkRes = chunk as GenerateContentResponse;
-        // Удаляем звездочки программно для чистоты вывода
         const rawText = chunkRes.text || "";
         fullResponseText += rawText.replace(/\*/g, '');
         
@@ -149,11 +134,12 @@ const Assistant: React.FC = () => {
       console.error("API Error:", err);
       const msg = err.message || "";
       
-      if (msg.includes("Requested entity was not found") || msg.includes("API_KEY") || msg.includes("401")) {
+      // Если сущность не найдена — значит ключ не подходит для этой модели
+      if (msg.includes("Requested entity was not found") || msg.includes("404") || msg.includes("API_KEY") || msg.includes("401")) {
         setHasKey(false);
-        setError("Доступ ограничен. Переподключите ключ.");
+        setError("Текущий ключ не имеет доступа к модели. Пожалуйста, выберите ключ из ПЛАТНОГО проекта Google Cloud.");
       } else {
-        setError("Ошибка связи. Попробуйте еще раз.");
+        setError("Ошибка сети или превышено время ожидания. Попробуйте снова.");
       }
       
       setMessages(prev => prev.filter((m, i) => !(m.role === 'assistant' && m.text === "" && i === prev.length - 1)));
@@ -172,7 +158,7 @@ const Assistant: React.FC = () => {
           <Bot className="h-8 w-8 transition-transform group-hover:rotate-12" />
         </button>
       ) : (
-        <div className="flex h-[560px] w-[360px] sm:w-[410px] flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0b0f1a]/95 shadow-2xl backdrop-blur-3xl animate-scale-in origin-bottom-right">
+        <div className="flex h-[580px] w-[360px] sm:w-[420px] flex-col overflow-hidden rounded-[2.5rem] border border-white/10 bg-[#0b0f1a]/95 shadow-2xl backdrop-blur-3xl animate-scale-in origin-bottom-right">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-white/10 bg-white/5 p-5">
             <div className="flex items-center gap-3">
@@ -184,7 +170,7 @@ const Assistant: React.FC = () => {
               </div>
               <div>
                 <h3 className="text-[13px] font-bold text-white uppercase tracking-wider leading-none">Системотех ИИ</h3>
-                <span className="text-[10px] text-emerald-400 font-semibold tracking-wide">Live • Instant Mode</span>
+                <span className="text-[10px] text-emerald-400 font-semibold tracking-wide">Live • Pay-as-you-go</span>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -206,14 +192,22 @@ const Assistant: React.FC = () => {
               <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-full bg-amber-500/10 border border-amber-500/20">
                 <Key className="h-10 w-10 text-amber-400" />
               </div>
-              <h4 className="text-white font-bold text-lg mb-2">Доступ ограничен</h4>
-              <p className="text-sm text-white/50 mb-8 leading-relaxed">Для активации поиска и мгновенных ответов выберите ваш API-ключ.</p>
+              <h4 className="text-white font-bold text-lg mb-2">Требуется платный ключ</h4>
+              <p className="text-sm text-white/50 mb-6 leading-relaxed">Для работы Gemini 3 Flash на внешних сайтах необходим ключ из проекта с включенным биллингом.</p>
+              
               <button 
                 onClick={handleSelectKey}
-                className="w-full rounded-2xl bg-sky-600 py-4 font-bold text-white shadow-xl shadow-sky-600/30 hover:bg-sky-500 transition-all active:scale-95"
+                className="w-full rounded-2xl bg-sky-600 py-4 font-bold text-white shadow-xl shadow-sky-600/30 hover:bg-sky-500 transition-all active:scale-95 mb-4"
               >
-                Активировать Ключ
+                Выбрать Ключ (GCP)
               </button>
+
+              <div className="flex flex-col gap-2">
+                <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noreferrer" className="text-[11px] text-sky-400 hover:underline flex items-center justify-center gap-1">
+                  Инструкция по настройке биллинга <ExternalLink className="h-3 w-3" />
+                </a>
+                <p className="text-[10px] text-white/20 italic">После выбора ключа ассистент станет доступен мгновенно.</p>
+              </div>
             </div>
           ) : (
             <>
@@ -231,12 +225,12 @@ const Assistant: React.FC = () => {
                       {m.sources && m.sources.length > 0 && (
                         <div className="mt-4 pt-3 border-t border-white/10">
                           <p className="text-[9px] text-white/40 mb-2 flex items-center gap-1.5 uppercase font-bold tracking-widest">
-                            <Globe className="h-3 w-3" /> Проверено в сети:
+                            <Globe className="h-3 w-3" /> Источники:
                           </p>
                           <div className="flex flex-wrap gap-2">
                             {m.sources.map((s, si) => (
                               <a key={si} href={s.uri} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 rounded-lg bg-sky-500/5 px-2.5 py-1.5 text-[10px] text-sky-400 border border-sky-500/10 hover:bg-sky-500/20 transition-all">
-                                <span className="truncate max-w-[120px]">{s.title || 'Источник'}</span>
+                                <span className="truncate max-w-[120px]">{s.title || 'Подробнее'}</span>
                                 <ExternalLink className="h-2.5 w-2.5 shrink-0" />
                               </a>
                             ))}
@@ -249,16 +243,21 @@ const Assistant: React.FC = () => {
                 {isLoading && messages[messages.length - 1].text === "" && (
                   <div className="flex items-center gap-2.5 text-[11px] text-sky-400 font-medium animate-pulse bg-sky-500/10 w-fit p-3 rounded-2xl border border-sky-500/20">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    <span>Поиск информации...</span>
+                    <span>Поиск и анализ...</span>
                   </div>
                 )}
                 {error && (
-                  <div className="flex items-center gap-3 rounded-2xl bg-rose-500/10 p-4 text-[11px] text-rose-400 border border-rose-500/20 shadow-lg">
-                    <AlertCircle className="h-5 w-5 shrink-0" />
-                    <div className="flex flex-col gap-1">
-                       <span>{error}</span>
-                       {!hasKey && <button onClick={handleSelectKey} className="text-sky-400 underline text-left">Выбрать ключ повторно</button>}
+                  <div className="flex flex-col gap-3 rounded-2xl bg-rose-500/10 p-4 text-[11px] text-rose-400 border border-rose-500/20 shadow-lg">
+                    <div className="flex items-center gap-3">
+                      <AlertCircle className="h-5 w-5 shrink-0" />
+                      <span>{error}</span>
                     </div>
+                    <button 
+                      onClick={handleSelectKey}
+                      className="text-white bg-rose-600/40 hover:bg-rose-600 px-3 py-1.5 rounded-lg transition-colors w-fit font-bold"
+                    >
+                      Сменить API ключ
+                    </button>
                   </div>
                 )}
                 <div ref={messagesEndRef} />
@@ -272,26 +271,26 @@ const Assistant: React.FC = () => {
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                    placeholder="Задайте технический вопрос..."
+                    placeholder="Технический вопрос..."
                     className="w-full rounded-2xl border border-white/10 bg-[#0b0f1a] py-4.5 pl-5 pr-14 text-sm text-white focus:border-sky-500/50 focus:outline-none focus:ring-4 focus:ring-sky-500/10 placeholder:text-white/20 transition-all shadow-inner"
                   />
                   <button
                     onClick={handleSend}
                     disabled={!input.trim() || isLoading}
-                    className="absolute right-2 rounded-xl bg-sky-600 p-2.5 text-white hover:bg-sky-500 disabled:opacity-20 transition-all active:scale-90 shadow-lg shadow-sky-600/20"
+                    className="absolute right-2 rounded-xl bg-sky-600 p-2.5 text-white hover:bg-sky-500 disabled:opacity-20 transition-all active:scale-90 shadow-lg"
                   >
                     <Send className="h-5 w-5" />
                   </button>
                 </div>
                 <div className="mt-4 flex items-center justify-center gap-6">
                    <div className="flex items-center gap-1.5 text-[9px] text-white/20 uppercase font-bold tracking-tighter">
-                      <ShieldCheck className="h-3 w-3" /> Secure
+                      <ShieldCheck className="h-3 w-3" /> Инженерный чат
                    </div>
                    <div className="flex items-center gap-1.5 text-[9px] text-white/20 uppercase font-bold tracking-tighter">
-                      <MessageSquare className="h-3 w-3" /> Plain Text
+                      <MessageSquare className="h-3 w-3" /> Без Markdown
                    </div>
                    <div className="flex items-center gap-1.5 text-[9px] text-white/20 uppercase font-bold tracking-tighter">
-                      <Zap className="h-3 w-3" /> Flash
+                      <Zap className="h-3 w-3" /> Flash Speed
                    </div>
                 </div>
               </div>
