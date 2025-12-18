@@ -34,14 +34,16 @@
               'slide-up': 'slideUp 0.8s ease-out forwards',
               'blur-in': 'blurIn 0.8s ease-out forwards',
               'glow': 'glow 3s ease-in-out infinite alternate',
-              'float': 'float 6s ease-in-out infinite'
+              'float': 'float 6s ease-in-out infinite',
+              'scale-in': 'scaleIn 0.3s cubic-bezier(0.2, 0, 0.13, 1.5) forwards'
             },
             keyframes: {
               fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
               slideUp: { '0%': { opacity: '0', transform: 'translateY(30px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
               blurIn: { '0%': { opacity: '0', filter: 'blur(12px)' }, '100%': { opacity: '1', filter: 'blur(0px)' } },
               glow: { '0%': { boxShadow: '0 0 20px rgba(56, 189, 248, 0.2)' }, '100%': { boxShadow: '0 0 50px rgba(56, 189, 248, 0.5)' } },
-              float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-20px)' } }
+              float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-20px)' } },
+              scaleIn: { '0%': { opacity: '0', transform: 'scale(0.9) translateY(20px)' }, '100%': { opacity: '1', transform: 'scale(1) translateY(0)' } }
             }
           }
         }
@@ -73,6 +75,18 @@
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
       }
+      .section-divider {
+        position: relative;
+      }
+      .section-divider::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 10%;
+        right: 10%;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+      }
     </style>
   <script type="importmap">
 {
@@ -86,7 +100,7 @@
 }
 </script>
 </head>
-  <body class="antialiased selection:bg-brand-primary/30 selection:text-brand-primary">
+  <body class="antialiased selection:bg-brand-primary/30 selection:text-brand-primary overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
   </body>
